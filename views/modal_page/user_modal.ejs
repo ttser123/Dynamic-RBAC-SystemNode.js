@@ -1,0 +1,90 @@
+<div class="modal fade" id="addUserModal" tabindex="-1" role="dialog" aria-labelledby="addUserModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="addUserModalLabel">เพิ่มผู้ใช้งานใหม่</h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form action="/admin/add-user" method="POST">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="new_username">Username</label>
+            <input type="text" class="form-control" id="new_username" name="username" required>
+          </div>
+          <div class="form-group">
+            <label for="new_first_name">ชื่อ</label>
+            <input type="text" class="form-control" id="new_first_name" name="first_name" required>
+          </div>
+          <div class="form-group">
+            <label for="new_last_name">นามสกุล</label>
+            <input type="text" class="form-control" id="new_last_name" name="last_name" required>
+          </div>
+          <div class="form-group">
+            <label for="new_password">รหัสผ่าน</label>
+            <input type="password" class="form-control" id="new_password" name="password" required>
+          </div>
+          <div class="form-group">
+            <label for="new_role">สิทธิ์การใช้งาน (Role)</label>
+            <select class="form-control" id="new_role" name="role" required>
+              <option value="staff">Staff</option>
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">บันทึกข้อมูล</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="editUserModal" tabindex="-1" role="dialog" aria-labelledby="editUserModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title" id="editUserModalLabel">แก้ไขผู้ใช้งาน</h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="editUserForm" method="POST"> 
+        <div class="modal-body">
+          <input type="hidden" id="edit_id" name="id">
+          <div class="form-group">
+            <label for="edit_username">Username</label>
+            <input type="text" class="form-control" id="edit_username" name="username" disabled> 
+          </div>
+          <div class="form-group">
+            <label for="edit_first_name">ชื่อ</label>
+            <input type="text" class="form-control" id="edit_first_name" name="first_name" required>
+          </div>
+          <div class="form-group">
+            <label for="edit_last_name">นามสกุล</label>
+            <input type="text" class="form-control" id="edit_last_name" name="last_name" required>
+          </div>
+          <div class="form-group">
+            <label for="edit_password">รหัสผ่าน **(กรอกใหม่เพื่อเปลี่ยน)**</label>
+            <input type="password" class="form-control" id="edit_password" name="password" placeholder="เว้นว่างไว้หากไม่ต้องการเปลี่ยนรหัสผ่าน">
+          </div>
+          <div class="form-group">
+            <label for="edit_role">สิทธิ์การใช้งาน (Role)</label>
+            <select class="form-control" id="edit_role" name="role" required>
+              <option value="staff">Staff</option>
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-info">บันทึกการแก้ไข</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

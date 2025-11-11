@@ -1,0 +1,106 @@
+<% 
+    // *******************************************************************
+    // 1. สร้างแถวตารางผู้ใช้งาน
+    // *******************************************************************
+    const userTableRows = users.map(u => `
+        <tr>
+            <td>${u.id}</td>
+            <td>${u.username}</td>
+            <td>${u.first_name} ${u.last_name}</td>
+            <td><span class="badge badge-${u.role === 'admin' ? 'danger' : (u.role === 'staff' ? 'warning' : 'success')}">${u.role.toUpperCase()}</span></td>
+            <td>
+                <button class="btn btn-sm btn-info edit-btn" 
+                    data-toggle="modal" 
+                    data-target="#editUserModal"
+                    data-id="${u.id}"
+                    data-username="${u.username}"
+                    data-firstname="${u.first_name}"
+                    data-lastname="${u.last_name}"
+                    data-role="${u.role}">
+                    <i class="fas fa-edit"></i> แก้ไข
+                </button>
+                <form action="/admin/delete-user/${u.id}" method="POST" class="d-inline" onsubmit="return confirm('คุณแน่ใจหรือไม่ว่าต้องการลบผู้ใช้งาน: ${u.username}?');">
+                    <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i> ลบ</button>
+                </form>
+            </td>
+        </tr>
+    `).join('');
+    
+    // *******************************************************************
+    // 2. เนื้อหาหลักของ Body ทั้งหมด
+    // *******************************************************************
+    const body_content = `
+        <h2 class="mb-4"><i class="fas fa-users-cog"></i> จัดการผู้ใช้งาน</h2>
+        
+        ${messages.success ? '<div class="alert alert-success">' + messages.success + '</div>' : ''}
+        ${messages.error ? '<div class="alert alert-danger">' + messages.error + '</div>' : ''}
+
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <button class="btn btn-primary" data-toggle="modal" data-target="#addUserModal">
+                    <i class="fas fa-plus"></i> เพิ่มผู้ใช้งาน
+                </button>
+            </div>
+            <div class="col-md-8">
+                <form action="/admin/manage-users" method="GET" class="form-inline float-right">
+                    <input type="text" name="search" class="form-control mr-sm-2" placeholder="ค้นหา ชื่อ/Username" value="${searchQuery || ''}">
+                    <button type="submit" class="btn btn-outline-secondary"><i class="fas fa-search"></i> ค้นหา</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>ชื่อ - นามสกุล</th>
+                        <th>Role</th>
+                        <th>ดำเนินการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${users.length === 0 ? '<tr><td colspan="5" class="text-center">ไม่พบข้อมูลผู้ใช้งาน</td></tr>' : userTableRows}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    // *******************************************************************
+    // 3. Script เนื้อหา JavaScript
+    // *******************************************************************
+    const script_content = `
+        <script>
+            $(document).ready(function() {
+                // เมื่อปุ่ม "แก้ไข" ถูกคลิก
+                $('.edit-btn').on('click', function() {
+                    const id = $(this).data('id');
+                    const username = $(this).data('username');
+                    const firstName = $(this).data('firstname');
+                    const lastName = $(this).data('lastname');
+                    const role = $(this).data('role');
+
+                    // กำหนดค่าในฟอร์ม Modal
+                    $('#edit_id').val(id);
+                    $('#edit_username').val(username);
+                    $('#edit_first_name').val(firstName);
+                    $('#edit_last_name').val(lastName);
+                    $('#edit_role').val(role);
+                    
+                    // กำหนด Action URL ของฟอร์ม
+                    $('#editUserForm').attr('action', '/admin/edit-user/' + id);
+                });
+            });
+        </script>
+    `;
+%>
+
+<%- include('partials/layout', { 
+    title: 'Admin - จัดการผู้ใช้งาน', 
+    user: user, 
+    body: body_content, 
+    script: script_content
+}) %>
+
+<%- include('modal_page/user_modal') %>

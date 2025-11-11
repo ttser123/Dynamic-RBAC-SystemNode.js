@@ -1,0 +1,86 @@
+<% 
+    const body_and_modal_content = `
+        <h2><i class="fas fa-user"></i> ข้อมูลส่วนตัว</h2>
+        
+        ${(messages.success && messages.success.length > 0) ? '<div class="alert alert-success">' + messages.success + '</div>' : ''}
+${(messages.error && messages.error.length > 0) ? '<div class="alert alert-danger">' + messages.error + '</div>' : ''}
+
+        <table class="table table-bordered" style="max-width: 600px;">
+            <tbody>
+                <tr>
+                    <th style="width: 150px;">Username</th>
+                    <td><strong>${user.username}</strong> (ไม่สามารถแก้ไขได้)</td>
+                </tr>
+                <tr>
+                    <th>ชื่อ</th>
+                    <td><strong>${user.first_name}</strong></td>
+                </tr>
+                <tr>
+                    <th>นามสกุล</th>
+                    <td><strong>${user.last_name}</strong></td>
+                </tr>
+                <tr>
+                    <th>สิทธิ์</th>
+                    <td><strong>${user.role.toUpperCase()}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <button class="btn btn-info" data-toggle="modal" data-target="#editProfileModal">
+            <i class="fas fa-user-edit"></i> แก้ไขข้อมูลส่วนตัว
+        </button>
+
+        <div class="modal fade" id="editProfileModal" tabindex="-1" role="dialog" aria-labelledby="editProfileModalLabel" aria-hidden="true">
+          <div class="modal-dialog" role="document">
+            <div class="modal-content">
+              <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="editProfileModalLabel">แก้ไขข้อมูลส่วนตัว</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              
+              <form action="/profile/update" method="POST">
+                <div class="modal-body">
+                  
+                  <div class="form-group">
+                    <label for="profile_username">Username</label>
+                    <input type="text" class="form-control" id="profile_username" value="${user.username}" disabled>
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="profile_first_name">ชื่อ</label>
+                    <input type="text" class="form-control" id="profile_first_name" name="first_name" value="${user.first_name}" required>
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="profile_last_name">นามสกุล</label>
+                    <input type="text" class="form-control" id="profile_last_name" name="last_name" value="${user.last_name}" required>
+                  </div>
+                  
+                  <hr>
+                  
+                  <div class="form-group">
+                    <label for="profile_password">รหัสผ่านใหม่</label>
+                    <input type="password" class="form-control" id="profile_password" name="password" placeholder="เว้นว่างไว้หากไม่ต้องการเปลี่ยนรหัสผ่าน">
+                    <small class="form-text text-muted">หากคุณกรอกรหัสผ่านใหม่ รหัสผ่านเดิมจะถูกแทนที่</small>
+                  </div>
+
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-dismiss="modal">ยกเลิก</button>
+                  <button type="submit" class="btn btn-info">บันทึกการเปลี่ยนแปลง</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+    `;
+%>
+
+<%- include('partials/layout', { 
+    title: 'ข้อมูลส่วนตัว', 
+    user: user, 
+    body: body_and_modal_content, 
+    script: '' 
+}) %>
