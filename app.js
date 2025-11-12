@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const path = require('path');
 const flash = require('connect-flash');
 const dotenv = require('dotenv');
+const axios = require('axios');
 
 dotenv.config();
 
@@ -230,11 +231,81 @@ app.post('/profile/update', isAuthenticated, checkPermission('edit_own_profile')
 });
 
 // --- 6. Staff Routes ---
+
 app.get('/member-list', isAuthenticated, checkPermission('view_member_list'), (req, res) => {
-    // ... Logic ...
-    res.render('member_list', { user: req.session.user }); 
+    
+    const searchQuery = req.query.search ? `%${req.query.search}%` : '%';
+    
+    // [สำคัญ] ดึงข้อมูลเฉพาะ role = 'member'
+    const sql = `
+        SELECT id, username, first_name, last_name 
+        FROM users 
+        WHERE role = 'member' 
+        AND (username LIKE ? OR first_name LIKE ? OR last_name LIKE ?)
+    `;
+
+    db.query(sql, [searchQuery, searchQuery, searchQuery], (err, members) => {
+        if (err) {
+            console.error(err);
+            req.flash('error', 'เกิดข้อผิดพลาดในการดึงข้อมูล Member');
+            return res.render('member_list', {
+                user: req.session.user,
+                members: [],
+                searchQuery: req.query.search || ''
+            });
+        }
+        
+        // ส่งข้อมูล members ไปให้ EJS
+        res.render('member_list', {
+            user: req.session.user,
+            members: members,
+            searchQuery: req.query.search || ''
+        });
+    });
 });
 
+app.post('/member/add', isAuthenticated, checkPermission('create_member'), async (req, res) => {
+    // เราดึงแค่ 4 ค่า (ไม่สน role ที่ส่งมา)
+    const { username, password, first_name, last_name } = req.body;
+    
+    if (!username || !password || !first_name || !last_name) {
+        req.flash('error', 'กรุณากรอกข้อมูลให้ครบถ้วน');
+        return res.redirect('/member-list'); // กลับไปหน้า member list
+    }
+    
+    try {
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        
+        // [สำคัญ] เราบังคับ Role เป็น 'member' ที่นี่
+        const newUser = {
+            username: username,
+            password: hashedPassword,
+            first_name: first_name,
+            last_name: last_name,
+            role: 'member' // บังคับ Role
+        };
+
+        const sql = 'INSERT INTO users SET ?';
+        
+        db.query(sql, newUser, (err, result) => {
+            if (err) {
+                if (err.code === 'ER_DUP_ENTRY') {
+                    req.flash('error', `Username '${username}' ถูกใช้แล้ว`);
+                } else {
+                    console.error(err);
+                    req.flash('error', 'เกิดข้อผิดพลาดในการเพิ่มข้อมูล');
+                }
+            } else {
+                req.flash('success', `✅ เพิ่ม Member **${username}** สำเร็จแล้ว`);
+            }
+            res.redirect('/member-list'); // กลับไปหน้า member list
+        });
+    } catch (error) {
+        console.error(error);
+        req.flash('error', 'เกิดข้อผิดพลาดในการเข้ารหัสรหัสผ่าน');
+        res.redirect('/member-list');
+    }
+});
 
 // --- 7. Admin Routes ---
 
@@ -439,7 +510,72 @@ app.post('/admin/manage-permissions/update', isAuthenticated, isAdmin, (req, res
 });
 
 
-// --- 8. Server Start ---
+// --- 8. Product Test Routes ---
+
+// 8.1 GET: แสดงหน้าฟอร์ม
+app.get('/products', isAuthenticated, checkPermission('add_products'), (req, res) => {
+    // (เราใช้ isAuthenticated เพื่อให้รู้ว่าใครกดส่ง)
+    // (messages จะถูกส่งไปโดย isAuthenticated middleware อัตโนมัติ)
+    res.render('products/products_list', { 
+        user: req.session.user 
+    });
+});
+
+// 8.2 POST: รับข้อมูลจากฟอร์ม EJS และส่งไป n8n
+// ใน app.js:
+
+// ... (ส่วน import axios) ...
+
+app.post('/products/add', isAuthenticated, async (req, res) => {
+    
+    // 1. [สำคัญ] req.body ที่มาจากฟอร์มของคุณ
+    const { productName, price } = req.body;
+    
+    const N8N_WEBHOOK_URL = 'http://localhost:5678/webhook-test/d5fa26ee-9be9-48c9-bf91-03b0cf8fcb94'; // <-- ใช้ Production URL
+
+    // 2. [สำคัญ] สร้าง Array เปล่าเพื่อแปลงข้อมูล
+    const products = [];
+
+    // 3. ตรวจสอบว่า productName เป็น Array (เพราะฟอร์มใช้ productName[])
+    if (productName && Array.isArray(productName)) {
+        
+        // วนลูปตามจำนวนสินค้าที่ส่งมา
+        for (let i = 0; i < productName.length; i++) {
+            
+            // ตรวจสอบว่ามีข้อมูลทั้งสองช่อง
+            if (productName[i] && price[i]) {
+                products.push({
+                    productName: productName[i],
+                    price: price[i]
+                });
+            }
+        }
+    }
+
+    // 4. ตรวจสอบว่ามีสินค้าที่แปลงแล้วหรือไม่
+    if (products.length === 0) {
+        req.flash('error', 'ไม่พบข้อมูลสินค้าที่จะส่ง หรือข้อมูลไม่ครบถ้วน');
+        return res.redirect('/products');
+    }
+
+    try {
+        // 5. [สำคัญมาก] ส่ง Array ที่แปลงแล้วทั้งก้อน 
+        // ภายใต้ key ชื่อ "products" ไปที่ n8n
+        await axios.post(N8N_WEBHOOK_URL, {
+            products: products // n8n จะได้รับ: { "products": [{...}, {...}, {...}] }
+        });
+        
+        req.flash('success', `เพิ่มสินค้า ${products.length} รายการ สำเร็จ!`);
+        res.redirect('/products');
+
+    } catch (error) {
+        console.error('Error sending to n8n:', error.message);
+        req.flash('error', 'เกิดข้อผิดพลาดในการส่งข้อมูลไป n8n');
+        res.redirect('/products');
+    }
+});
+
+// --- 9. Server Start ---
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
     console.log(`Login page: http://localhost:${port}/login`);

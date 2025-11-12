@@ -1,0 +1,113 @@
+<%
+    // *******************************************************************
+    // 1. เนื้อหา Body
+    // *******************************************************************
+    const body_content = `
+        <h2 class="mb-4"></i> เพิ่มสินค้า</h2>
+
+        ${(messages.success && messages.success.length > 0) ? '<div class="alert alert-success">' + messages.success + '</div>' : ''}
+        ${(messages.error && messages.error.length > 0) ? '<div class="alert alert-danger">' + messages.error + '</div>' : ''}
+
+        <form action="/products/add" method="POST" id="product-form">
+            <div class="card">
+                <div class="card-header">
+                    กรอกข้อมูลสินค้า (สามารถเพิ่มหลายรายการได้)
+                </div>
+                
+                <div class="card-body" id="product-list-container">
+
+                    <!-- แถวเริ่มต้น -->
+                    <div class="row product-row mb-2">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>ชื่อสินค้า</label>
+                                <input type="text" class="form-control" name="productName[]" placeholder="ชื่อสินค้า" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>ราคา</label>
+                                <input type="number" class="form-control" name="price[]" placeholder="ราคา" required>
+                            </div>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="button" class="btn btn-danger btn-sm remove-row-btn d-none">
+                                <i class="fas fa-trash"></i> ลบ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-footer d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary" id="add-product-row">
+                        <i class="fas fa-plus"></i> เพิ่มรายการสินค้า
+                    </button>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        </i> ส่งข้อมูลทั้งหมด
+                    </button>
+                </div>
+            </div>
+        </form>
+    `;
+
+    // *******************************************************************
+    // 2. โค้ด JavaScript
+    // *******************************************************************
+    const script_content = `
+        <script>
+            document.getElementById('add-product-row').addEventListener('click', function() {
+                const container = document.getElementById('product-list-container');
+
+                const newRow = document.createElement('div');
+                newRow.className = 'row product-row mb-2';
+                newRow.innerHTML = \`
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <input type="text" class="form-control" name="productName[]" placeholder="ชื่อสินค้า" required>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <input type="number" class="form-control" name="price[]" placeholder="ราคา" required>
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-center">
+                        <button type="button" class="btn btn-danger btn-sm remove-row-btn">
+                            <i class="fas fa-trash"></i> ลบ
+                        </button>
+                    </div>
+                \`;
+
+                container.appendChild(newRow);
+            });
+
+            // ใช้ Event Delegation สำหรับปุ่มลบ
+            document.getElementById('product-list-container').addEventListener('click', function(e) {
+                const btn = e.target.closest('.remove-row-btn');
+                if (btn) {
+                    btn.closest('.product-row').remove();
+                }
+            });
+
+            // ตรวจสอบก่อนส่งฟอร์ม
+            document.getElementById('product-form').addEventListener('submit', function(e) {
+                const names = [...document.querySelectorAll('input[name="productName[]"]')];
+                const prices = [...document.querySelectorAll('input[name="price[]"]')];
+
+                const hasEmpty = names.some(i => !i.value.trim()) || prices.some(i => !i.value.trim());
+                if (hasEmpty) {
+                    e.preventDefault();
+                    alert('กรุณากรอกข้อมูลสินค้าให้ครบทุกช่อง');
+                }
+            });
+        </script>
+    `;
+%>
+
+<%- include('../partials/layout', { 
+    title: 'เพิ่มสินค้า (หลายรายการ)', 
+    user: user, 
+    body: body_content, 
+    script: script_content 
+}) %>

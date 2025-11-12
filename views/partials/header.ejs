@@ -1,5 +1,6 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <a class="navbar-brand" href="/dashboard">ระบบจัดการข้อมูล</a>
+
     
     <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -43,6 +44,11 @@
                         <% if (user.role === 'admin' || user.permissions.includes('view_member_list')) { %>
                             <a class="dropdown-item" href="/member-list">
                                 <i class="fas fa-users"></i> ดูรายการ Member
+                            </a>
+                        <% } %>
+                        <% if (user.role === 'admin' || user.permissions.includes('add_products')) { %>
+                            <a class="dropdown-item" href="/products">
+                                <i class="fas fa-plus"></i> เพิ่มรายการสินค้า
                             </a>
                             <div class="dropdown-divider"></div>
                         <% } %>
