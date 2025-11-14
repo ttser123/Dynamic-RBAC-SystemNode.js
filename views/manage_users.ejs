@@ -3,11 +3,11 @@
     // 1. สร้างแถวตารางผู้ใช้งาน
     // *******************************************************************
     const userTableRows = users.map(u => `
-        <tr>
+        <tr id="user-row-${u.id}">
             <td>${u.id}</td>
-            <td>${u.username}</td>
-            <td>${u.first_name} ${u.last_name}</td>
-            <td><span class="badge badge-${u.role === 'admin' ? 'danger' : (u.role === 'staff' ? 'warning' : 'success')}">${u.role.toUpperCase()}</span></td>
+            <td data-field="username">${u.username}</td>
+            <td data-field="name">${u.first_name || ''} ${u.last_name || ''}</td>
+            <td data-field="role"><span class="badge badge-${u.role === 'admin' ? 'danger' : (u.role === 'staff' ? 'warning' : 'success')}">${u.role.toUpperCase()}</span></td>
             <td>
                 <button class="btn btn-sm btn-info edit-btn" 
                     data-toggle="modal" 
@@ -19,9 +19,10 @@
                     data-role="${u.role}">
                     <i class="fas fa-edit"></i> แก้ไข
                 </button>
-                <form action="/admin/delete-user/${u.id}" method="POST" class="d-inline" onsubmit="return confirm('คุณแน่ใจหรือไม่ว่าต้องการลบผู้ใช้งาน: ${u.username}?');">
-                    <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i> ลบ</button>
-                </form>
+                
+                <button class="btn btn-sm btn-danger delete-btn" data-id="${u.id}" data-username="${u.username}">
+                    <i class="fas fa-trash"></i> ลบ
+                </button>
             </td>
         </tr>
     `).join('');
@@ -32,9 +33,6 @@
     const body_content = `
         <h2 class="mb-4"><i class="fas fa-users-cog"></i> จัดการผู้ใช้งาน</h2>
         
-        ${messages.success ? '<div class="alert alert-success">' + messages.success + '</div>' : ''}
-        ${messages.error ? '<div class="alert alert-danger">' + messages.error + '</div>' : ''}
-
         <div class="row mb-3">
             <div class="col-md-4">
                 <button class="btn btn-primary" data-toggle="modal" data-target="#addUserModal">
@@ -73,28 +71,134 @@
     const script_content = `
         <script>
             $(document).ready(function() {
-                // เมื่อปุ่ม "แก้ไข" ถูกคลิก
-                $('.edit-btn').on('click', function() {
+                // (Toast ถูกติดตั้งแล้วใน layout.ejs)
+
+                // -------------------------------------
+                // 1. ADD USER (ฟอร์มเพิ่ม)
+                // -------------------------------------
+                $('#addUserForm').on('submit', async function(e) {
+                    e.preventDefault();
+                    const form = $(this);
+                    const btn = form.find('button[type="submit"]');
+                    btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...');
+                    const data = Object.fromEntries(new FormData(this).entries());
+
+                    try {
+                        const response = await fetch('/admin/add-user', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        const result = await response.json();
+                        if (!response.ok) { throw new Error(result.message); }
+
+                        // [สำเร็จ]
+                        $('#addUserModal').modal('hide');
+                        form[0].reset();
+                        Toast.fire({ icon: 'success', title: result.message });
+
+                        // [วาดแถวใหม่ - แก้ไขแล้ว!]
+                        const u = result.newUser;
+                        const roleClass = u.role === 'admin' ? 'danger' : (u.role === 'staff' ? 'warning' : 'success');
+                        const newRowHtml = '<tr id="user-row-' + u.id + '"><td>' + u.id + '</td><td data-field="username">' + u.username + '</td><td data-field="name">' + u.first_name + ' ' + u.last_name + '</td><td data-field="role"><span class="badge badge-' + roleClass + '">' + u.role.toUpperCase() + '</span></td><td><button class="btn btn-sm btn-info edit-btn" data-toggle="modal" data-target="#editUserModal" data-id="' + u.id + '" data-username="' + u.username + '" data-firstname="' + u.first_name + '" data-lastname="' + u.last_name + '" data-role="' + u.role + '"><i class="fas fa-edit"></i> แก้ไข</button><button class="btn btn-sm btn-danger delete-btn" data-id="' + u.id + '" data-username="' + u.username + '"><i class="fas fa-trash"></i> ลบ</button></td></tr>';
+                        $('table tbody').prepend(newRowHtml);
+
+                    } catch (error) {
+                        Toast.fire({ icon: 'error', title: error.message });
+                    } finally {
+                        btn.prop('disabled', false).html('บันทึกข้อมูล');
+                    }
+                });
+
+                // -------------------------------------
+                // 2. EDIT USER (ปุ่ม+ฟอร์มแก้ไข)
+                // -------------------------------------
+                $('table').on('click', '.edit-btn', function() {
+                    const id = $(this).data('id');
+                    $('#edit_id').val(id);
+                    $('#edit_username').val($(this).data('username'));
+                    $('#edit_first_name').val($(this).data('firstname'));
+                    $('#edit_last_name').val($(this).data('lastname'));
+                    $('#edit_role').val($(this).data('role'));
+                    $('#editUserForm').attr('action', '/admin/edit-user/' + id);
+                });
+
+                $('#editUserForm').on('submit', async function(e) {
+                    e.preventDefault();
+                    const form = $(this);
+                    const btn = form.find('button[type="submit"]');
+                    btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...');
+                    const actionUrl = form.attr('action');
+                    const data = Object.fromEntries(new FormData(this).entries());
+
+                    try {
+                        const response = await fetch(actionUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        const result = await response.json();
+                        if (!response.ok) { throw new Error(result.message); }
+
+                        // [สำเร็จ]
+                        $('#editUserModal').modal('hide');
+                        Toast.fire({ icon: 'success', title: result.message });
+
+                        // [อัปเดตตาราง]
+                        const u = result.updatedUser;
+                        const row = $('#user-row-' + u.id);
+                        row.find('[data-field="name"]').text(u.first_name + ' ' + u.last_name);
+                        const roleClass = u.role === 'admin' ? 'danger' : (u.role === 'staff' ? 'warning' : 'success');
+                        row.find('[data-field="role"]').html('<span class="badge badge-' + roleClass + '">' + u.role.toUpperCase() + '</span>');
+                        const editBtn = row.find('.edit-btn');
+                        editBtn.data('firstname', u.first_name);
+                        editBtn.data('lastname', u.last_name);
+                        editBtn.data('role', u.role);
+
+                    } catch (error) {
+                        Toast.fire({ icon: 'error', title: error.message });
+                    } finally {
+                        btn.prop('disabled', false).html('บันทึกการแก้ไข');
+                    }
+                });
+
+                // -------------------------------------
+                // 3. DELETE USER (ปุ่มลบ)
+                // -------------------------------------
+                $('table').on('click', '.delete-btn', function() {
                     const id = $(this).data('id');
                     const username = $(this).data('username');
-                    const firstName = $(this).data('firstname');
-                    const lastName = $(this).data('lastname');
-                    const role = $(this).data('role');
 
-                    // กำหนดค่าในฟอร์ม Modal
-                    $('#edit_id').val(id);
-                    $('#edit_username').val(username);
-                    $('#edit_first_name').val(firstName);
-                    $('#edit_last_name').val(lastName);
-                    $('#edit_role').val(role);
-                    
-                    // กำหนด Action URL ของฟอร์ม
-                    $('#editUserForm').attr('action', '/admin/edit-user/' + id);
+                    Swal.fire({
+                        title: 'ลบ ' + username + '?',
+                        text: "คุณแน่ใจหรือไม่ว่าต้องการลบผู้ใช้งานนี้",
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        cancelButtonColor: '#3085d6',
+                        confirmButtonText: 'ใช่, ลบเลย!',
+                        cancelButtonText: 'ยกเลิก'
+                    }).then(async (result) => {
+                        if (result.isConfirmed) {
+                            try {
+                                const response = await fetch('/admin/delete-user/' + id, {
+                                    method: 'POST' 
+                                });
+                                const data = await response.json();
+                                if (!response.ok) { throw new Error(data.message); }
+                                
+                                Toast.fire({ icon: 'success', title: data.message });
+                                $('#user-row-' + id).fadeOut(300, function() { $(this).remove(); });
+                            } catch (error) {
+                                Toast.fire({ icon: 'error', title: error.message });
+                            }
+                        }
+                    });
                 });
             });
         </script>
     `;
-%>
+%> 
 
 <%- include('partials/layout', { 
     title: 'Admin - จัดการผู้ใช้งาน', 

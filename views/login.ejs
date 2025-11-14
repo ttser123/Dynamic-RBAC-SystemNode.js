@@ -1,43 +1,87 @@
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>login</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-</head>
-<body>
-    <div class="container">
+<%
+    const body_content = `
         <div class="row justify-content-center">
-            <div class="col-md-8" style="max-width: 400px; margin-top: 100px;">
-                <div class="card shadow-sm">
-                    <div class="card-header text-center bg-primary text-white">
-                        <h4 class="mb-0">เข้าสู่ระบบจัดการ</h4>
+            <div class="col-md-6 col-lg-4">
+                <div class="card mt-5">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="mb-0">กรุณาเข้าสู่ระบบ</h3>
                     </div>
                     <div class="card-body">
                         
-                        <% if (message) { %>
-                            <div class="alert alert-danger" role="alert">
-                                <%= message %>
-                            </div>
-                        <% } %>
-
-                        <form action="/auth" method="POST">
-                            <div class="form-group">
+                        <form id="loginForm"> <div class="form-group">
                                 <label for="username">Username</label>
-                                <input type="text" class="form-control" id="username" name="username" placeholder="กรอก Username" required>
+                                <input type="text" class="form-control" id="username" name="username" required>
                             </div>
                             <div class="form-group">
                                 <label for="password">Password</label>
-                                <input type="password" class="form-control" id="password" name="password" placeholder="กรอก Password" required>
+                                <input type="password" class="form-control" id="password" name="password" required>
                             </div>
-                            <button type="submit" class="btn btn-success btn-block mt-4">Login</button>
+                            <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+                                Login
+                            </button>
                         </form>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-    </body>
+    `;
+
+    // [AJAX] เพิ่ม script สำหรับ Fetch
+    const script_content = `
+        <script>
+            // (Toast ถูกติดตั้งแล้วใน layout.ejs)
+            
+            $('#loginForm').on('submit', async function(e) {
+                e.preventDefault();
+                
+                const loginBtn = $('#loginBtn');
+                loginBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> กำลังเข้าสู่ระบบ...');
+
+                const data = {
+                    username: $('#username').val(),
+                    password: $('#password').val()
+                };
+
+                try {
+                    const response = await fetch('/auth', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.message);
+                    }
+
+                    // สำเร็จ! แสดง Toast แล้วรอ 1 วินาทีก่อนเปลี่ยนหน้า
+                    Toast.fire({
+                        icon: 'success',
+                        title: 'เข้าสู่ระบบสำเร็จ',
+                        showConfirmButton: false,
+                        timer: 1000,
+                        timerProgressBar: true
+                    });
+                    setTimeout(() => {
+                        window.location.href = result.redirect; // <-- ไปยัง /dashboard
+                    }, 1000);
+
+                } catch (error) {
+                    Toast.fire({
+                        icon: 'error',
+                        title: error.message || 'เกิดข้อผิดพลาด'
+                    });
+                    loginBtn.prop('disabled', false).html('Login');
+                }
+            });
+        </script>
+    `;
+%>
+
+<%- include('partials/layout', { 
+    title: 'Login', 
+    user: null, 
+    body: body_content, 
+    script: script_content 
+}) %>

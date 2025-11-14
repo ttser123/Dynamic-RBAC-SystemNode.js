@@ -1,22 +1,15 @@
 <% 
-    // กำหนดตัวแปร body_content
     const body_content = `
-        <h2><i class="fas fa-home"></i> ยินดีต้อนรับสู่ Dashboard</h2>
-        <p>คุณ Login ด้วยสิทธิ์: ${user.role.toUpperCase()}</p>
-
-        ${user.role === 'admin' ? `
-            <div class="alert alert-info">ในฐานะ Admin, คุณสามารถเข้าถึงเมนู จัดการผู้ใช้งาน(CRUD) เพื่อสร้างบัญชี Staff และ Member ได้</div>
-        ` : user.role === 'staff' ? `
-            <div class="alert alert-warning">ในฐานะ Staff, คุณสามารถจัดการงานที่ได้รับมอบหมายได้</div>
-        ` : `
-            <div class="alert alert-success">ในฐานะ Member, คุณสามารถดูข้อมูลส่วนตัวได้</div>
-        `}
+        <div class="jumbotron">
+            <h1 class="display-4">ยินดีต้อนรับ, ${user.first_name}!</h1>
+            <p class="lead">คุณได้เข้าสู่ระบบด้วยสิทธิ์: <strong>${user.role.toUpperCase()}</strong></p>
+            <hr class="my-4">
+        </div>
     `;
 %>
-
 <%- include('partials/layout', { 
     title: 'Dashboard', 
     user: user, 
-    body: body_content,
+    body: body_content, 
     script: '' 
 }) %>

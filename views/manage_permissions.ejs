@@ -1,61 +1,93 @@
 <% 
-    // ตัวแปรที่ต้องส่งมาจาก app.js
-    // allPermissions: รายการสิทธิ์ทั้งหมด (จากตาราง permissions)
-    // currentSettings: Object ที่เก็บว่า Role ไหนมีสิทธิ์อะไรบ้าง (จากตาราง role_permissions)
+    const roles = ['staff', 'member'];
     
-    const roles = ['staff', 'member']; // ไม่ให้แก้สิทธิ์ Admin
+    // 1. เนื้อหา
+    const body_content = `
+        <h2 class="mb-4"><i class="fas fa-shield-alt"></i> ตั้งค่าสิทธิ์การเข้าถึง (Permissions)</h2>
+        <p>กำหนดว่า Role ใด สามารถเข้าถึงส่วนใดของระบบได้บ้าง (สิทธิ์ของ Admin จะถูกกำหนดไว้ถาวร)</p>
+        
+        <form id="permissionsForm"> <table class="table table-bordered table-hover">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>สิทธิ์การเข้าถึง (Permission)</th>
+                        ${roles.map(role => '<th class="text-center">' + role.toUpperCase() + '</th>').join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${allPermissions.map(perm => {
+                        // build permission row without inner template literals
+                        const head = '<tr>' +
+                            '<td><strong>' + perm.permission_key + '</strong><br><small class="text-muted">' + perm.description + '</small></td>';
+                        const cols = roles.map(role => {
+                            const hasPermission = currentSettings[role] && currentSettings[role].includes(perm.id);
+                            return '<td class="text-center align-middle">' +
+                                '<input type="checkbox" name="permissions[' + role + '][]" value="' + perm.id + '" ' + (hasPermission ? 'checked' : '') + ' style="transform: scale(1.5);">' +
+                                '</td>';
+                        }).join('');
+                        return head + cols + '</tr>';
+                    }).join('')}
+                </tbody>
+            </table>
+            
+            <button type="submit" class="btn btn-primary mt-1" id="permissionsSubmitBtn">
+                <i class="fas fa-save"></i> บันทึกการเปลี่ยนแปลงสิทธิ์
+            </button>
+        </form>
+    `; 
+    
+    // 2. สคริปต์ AJAX
+    const script_content = `
+        <script>
+            $('#permissionsForm').on('submit', async function(e) {
+                e.preventDefault();
+                
+                const btn = $('#permissionsSubmitBtn');
+                btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...');
+
+                // [สำคัญ!] FormData ไม่สามารถ serialize object ที่ซ้อนกัน (permissions[staff][]) ได้ดี
+                // เราต้องสร้าง Object เอง
+                const data = {
+                    permissions: {
+                        staff: [],
+                        member: []
+                    }
+                };
+                
+                // อ่านค่า Checkbox ของ Staff
+                $('input[name="permissions[staff][]"]:checked').each(function() {
+                    data.permissions.staff.push($(this).val());
+                });
+                
+                // อ่านค่า Checkbox ของ Member
+                $('input[name="permissions[member][]"]:checked').each(function() {
+                    data.permissions.member.push($(this).val());
+                });
+
+                try {
+                    const response = await fetch('/admin/manage-permissions/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    const result = await response.json();
+                    if (!response.ok) { throw new Error(result.message); }
+
+                    // [สำเร็จ]
+                    Toast.fire({ icon: 'success', title: result.message });
+
+                } catch (error) {
+                    Toast.fire({ icon: 'error', title: error.message });
+                } finally {
+                    btn.prop('disabled', false).html('<i class="fas fa-save"></i> บันทึกการเปลี่ยนแปลงสิทธิ์');
+                }
+            });
+        </script>
+    `;
 %>
 
 <%- include('partials/layout', { 
     title: 'Admin - ตั้งค่าสิทธิ์', 
     user: user, 
-    body: `
-        <h2 class="mb-4"><i class="fas fa-shield-alt"></i> ตั้งค่าสิทธิ์การเข้าถึง (Permissions)</h2>
-        <p>กำหนดว่า Role ใด สามารถเข้าถึงส่วนใดของระบบได้บ้าง (สิทธิ์ของ Admin จะถูกกำหนดไว้ถาวร)</p>
-        
-        ${(messages.success && messages.success.length > 0) ? '<div class="alert alert-success">' + messages.success + '</div>' : ''}
-
-        <form action="/admin/manage-permissions/update" method="POST">
-            <table class="table table-bordered table-hover">
-                <thead class="thead-dark">
-                    <tr>
-                        <th>สิทธิ์การเข้าถึง (Permission)</th>
-                        
-                        ${roles.map(role => `<th class="text-center">${role.toUpperCase()}</th>`).join('')}
-                    </tr>
-                </thead>
-                <tbody>
-                    ${allPermissions.map(perm => `
-                        <tr>
-                            <td>
-                                <strong>${perm.permission_key}</strong>
-                                <br>
-                                <small class="text-muted">${perm.description}</small>
-                            </td>
-                            
-                            ${roles.map(role => {
-                                // ตรวจสอบว่า Role นี้มีสิทธิ์นี้อยู่หรือไม่ (จาก currentSettings)
-                                const hasPermission = currentSettings[role] && currentSettings[role].includes(perm.id);
-                                
-                                return `
-                                <td class="text-center align-middle">
-                                    <input type="checkbox" 
-                                           name="permissions[${role}][]" 
-                                           value="${perm.id}" 
-                                           ${hasPermission ? 'checked' : ''}
-                                           style="transform: scale(1.5);">
-                                </td>
-                                `;
-                            }).join('')}
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-            
-            <button type="submit" class="btn btn-primary mt-1">
-                <i class="fas fa-save"></i> บันทึกการเปลี่ยนแปลงสิทธิ์
-            </button>
-        </form>
-    `, 
-    script: '' 
+    body: body_content, 
+    script: script_content 
 }) %>

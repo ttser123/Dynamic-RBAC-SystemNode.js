@@ -1,38 +1,23 @@
+// app.js
 const express = require('express');
-const mysql = require('mysql');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 const path = require('path');
-const flash = require('connect-flash');
 const dotenv = require('dotenv');
-const axios = require('axios');
+
+// [แก้ไข] Import pool จาก db.js
+const db = require('./db'); 
 
 dotenv.config();
 
 const app = express();
 const port = 3000;
-const saltRounds = 10; 
-
-// --- 1. Database Connection ---
-const db = mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'crud_db'
-});
-
-db.connect(err => {
-    if (err) {
-        console.error('Error connecting to MySQL:', err.stack);
-        return;
-    }
-    console.log('Connected to MySQL as id ' + db.threadId);
-});
 
 // --- 2. Middleware Setup ---
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-app.use(express.urlencoded({ extended: true })); 
+app.use(express.urlencoded({ extended: true })); // สำหรับ Form (แบบเก่า)
+app.use(express.json()); // [สำคัญ!] สำหรับ API (AJAX/Fetch)
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(session({
@@ -42,538 +27,69 @@ app.use(session({
     cookie: { maxAge: 1000 * 60 * 60 * 24 } // 24 ชั่วโมง
 }));
 
-app.use(flash()); 
+// [ลบ] connect-flash และ app.use(flash()) ทิ้งไป
+// [ลบ] app.get('/favicon.ico', ...) ทิ้งไป
 
-// --- 3. Authorization Middleware (ตรวจสอบสิทธิ์) ---
+// --- 3. Authorization Middleware ---
 
-// 3.1 ตรวจสอบว่า Login แล้วหรือยัง (ทุกหน้าที่ถูกป้องกันต้องใช้)
 const isAuthenticated = (req, res, next) => {
     if (req.session.loggedin) {
-        // ส่งข้อมูล user และ flash messages ไปยังทุกหน้า EJS
+        // [คลีน] ส่งแค่ user
         res.locals.user = req.session.user;
-        res.locals.messages = {
-            success: req.flash('success'),
-            error: req.flash('error')
-        };
         next();
     } else {
+        // ถ้าเป็น AJAX request ที่ยังไม่ login, ให้ตอบ JSON Error
+        if (req.xhr || (req.headers.accept && req.headers.accept.indexOf('json') > -1)) {
+            return res.status(401).json({ success: false, message: 'Session หมดอายุ, กรุณาเข้าสู่ระบบใหม่' });
+        }
+        // ถ้าเป็นการเข้าหน้าปกติ, redirect
         res.redirect('/login');
     }
 };
 
-// 3.2 ตรวจสอบสิทธิ์ Admin 
 const isAdmin = (req, res, next) => {
     if (req.session.loggedin && req.session.user.role === 'admin') {
         next();
     } else {
-        req.flash('error', 'คุณไม่มีสิทธิ์เข้าถึงหน้านี้ (เฉพาะ Admin)');
+        if (req.xhr || (req.headers.accept && req.headers.accept.indexOf('json') > -1)) {
+            return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์ (Admin) ในการดำเนินการนี้' });
+        }
         res.redirect('/dashboard'); 
     }
 };
 
-/**
- * 3.3 Middleware ตรวจสอบสิทธิ์การเข้าถึง (Permission Key)
- * @param {string} requiredPermissionKey - คีย์ของสิทธิ์ที่ต้องการสำหรับหน้านี้ 
- */
 const checkPermission = (requiredPermissionKey) => {
     return (req, res, next) => {
-        // Admin เข้าได้ทุกหน้า (Bypass)
         if (req.session.user.role === 'admin') {
             return next();
         }
-
-        // ตรวจสอบสิทธิ์ใน Session (ที่ดึงมาตอน Login)
         const userPermissions = req.session.user.permissions || [];
-        
         if (userPermissions.includes(requiredPermissionKey)) {
-            next(); // <-- มีสิทธิ์
+            next();
         } else {
-            // ไม่มีสิทธิ์
-            req.flash('error', 'คุณไม่มีสิทธิ์เข้าถึงหน้านี้');
+            if (req.xhr || (req.headers.accept && req.headers.accept.indexOf('json') > -1)) {
+                return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์ในการดำเนินการนี้' });
+            }
             res.redirect('/dashboard');
         }
     };
 };
 
-// --- 4. Authentication Routes (Login/Logout) ---
+// --- 4. Import & Use Routes ---
+const authRoutes = require('./routes/auth')(db, bcrypt);
+const mainRoutes = require('./routes/main')(db, bcrypt);
+const memberRoutes = require('./routes/member')(db);
+const adminRoutes = require('./routes/admin')(db, bcrypt);
+const productRoutes = require('./routes/product')(); // (ไฟล์นี้ไม่ใช้ db)
 
-app.get('/login', (req, res) => {
-    res.render('login', { message: req.flash('error')[0] });
-});
+// 4.1 Routes ที่ไม่ต้อง Login
+app.use('/', authRoutes); // ( /login, /logout, /auth )
 
-app.post('/auth', (req, res) => {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-        req.flash('error', 'กรุณากรอก Username และ Password');
-        return res.redirect('/login');
-    }
-
-    const sql = 'SELECT * FROM users WHERE username = ?';
-    db.query(sql, [username], async (err, results) => {
-        if (err) {
-            console.error(err);
-            req.flash('error', 'เกิดข้อผิดพลาดของระบบ');
-            return res.redirect('/login');
-        }
-        if (results.length === 0) {
-            req.flash('error', 'Username ไม่ถูกต้อง');
-            return res.redirect('/login');
-        }
-
-        const user = results[0];
-        const passwordMatch = await bcrypt.compare(password, user.password);
-
-        if (passwordMatch) {
-            
-            // [สำคัญ] ดึง "permission_key" (String) ไม่ใช่ "permission_id" (Number)
-            const sqlPerms = `
-                SELECT p.permission_key 
-                FROM role_permissions AS rp
-                JOIN permissions AS p ON rp.permission_id = p.id
-                WHERE rp.role = ?
-            `;
-            
-            db.query(sqlPerms, [user.role], (err, permResults) => {
-                if (err) {
-                    req.flash('error', 'เกิดข้อผิดพลาดในการดึงสิทธิ์');
-                    return res.redirect('/login');
-                }
-
-                // แปลงผลลัพธ์ [ {permission_key: '...'}, ... ] -> ['...', '...']
-                const userPermissions = permResults.map(p => p.permission_key);
-
-                req.session.loggedin = true;
-                req.session.user = {
-                    id: user.id,
-                    username: user.username,
-                    role: user.role,
-                    first_name: user.first_name,
-                    last_name: user.last_name,
-                    permissions: userPermissions // <-- เก็บสิทธิ์เป็น String Keys
-                };
-                
-                res.redirect('/dashboard');
-            });
-        } else {
-            req.flash('error', 'Password ไม่ถูกต้อง');
-            res.redirect('/login');
-        }
-    });
-});
-
-app.get('/logout', (req, res) => {
-    req.session.destroy(err => {
-        if (err) {
-            console.error('Session destruction error:', err);
-        }
-        res.redirect('/login');
-    });
-});
-
-// --- 5. Main Application Routes ---
-app.get('/', (req, res) => {
-    res.redirect('/dashboard');
-});
-
-// ทุก Route ด้านล่างนี้ต้อง Login ก่อน (ใช้ isAuthenticated)
-app.get('/dashboard', isAuthenticated, (req, res) => {
-    res.render('dashboard', { user: req.session.user });
-});
-
-// ตรวจสอบสิทธิ์ว่ามี 'edit_own_profile' หรือไม่
-app.get('/profile', isAuthenticated, checkPermission('edit_own_profile'), (req, res) => {
-    res.render('profile', { user: req.session.user });
-});
-
-app.post('/profile/update', isAuthenticated, checkPermission('edit_own_profile'), async (req, res) => {
-    const userId = req.session.user.id; 
-    const { first_name, last_name, password } = req.body;
-
-    if (!first_name || !last_name) {
-        req.flash('error', 'กรุณากรอกชื่อและนามสกุล');
-        return res.redirect('/profile');
-    }
-
-    let updateFields = ['first_name = ?', 'last_name = ?'];
-    let queryValues = [first_name, last_name];
-
-    try {
-        if (password) {
-            const hashedPassword = await bcrypt.hash(password, saltRounds);
-            updateFields.push('password = ?');
-            queryValues.push(hashedPassword);
-        }
-        
-        queryValues.push(userId); 
-        const sql = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
-
-        db.query(sql, queryValues, (err, result) => {
-            if (err) {
-                console.error(err);
-                req.flash('error', 'เกิดข้อผิดพลาดในการอัปเดตข้อมูล');
-                return res.redirect('/profile');
-            }
-
-            // อัปเดตข้อมูลใน Session ด้วย
-            req.session.user.first_name = first_name;
-            req.session.user.last_name = last_name;
-
-            req.flash('success', 'อัปเดตข้อมูลส่วนตัวสำเร็จ');
-            res.redirect('/profile');
-        });
-
-    } catch (error) {
-        console.error(error);
-        req.flash('error', 'เกิดข้อผิดพลาดในการเข้ารหัสรหัสผ่าน');
-        res.redirect('/profile');
-    }
-});
-
-// --- 6. Staff Routes ---
-
-app.get('/member-list', isAuthenticated, checkPermission('view_member_list'), (req, res) => {
-    
-    const searchQuery = req.query.search ? `%${req.query.search}%` : '%';
-    
-    // [สำคัญ] ดึงข้อมูลเฉพาะ role = 'member'
-    const sql = `
-        SELECT id, username, first_name, last_name 
-        FROM users 
-        WHERE role = 'member' 
-        AND (username LIKE ? OR first_name LIKE ? OR last_name LIKE ?)
-    `;
-
-    db.query(sql, [searchQuery, searchQuery, searchQuery], (err, members) => {
-        if (err) {
-            console.error(err);
-            req.flash('error', 'เกิดข้อผิดพลาดในการดึงข้อมูล Member');
-            return res.render('member_list', {
-                user: req.session.user,
-                members: [],
-                searchQuery: req.query.search || ''
-            });
-        }
-        
-        // ส่งข้อมูล members ไปให้ EJS
-        res.render('member_list', {
-            user: req.session.user,
-            members: members,
-            searchQuery: req.query.search || ''
-        });
-    });
-});
-
-app.post('/member/add', isAuthenticated, checkPermission('create_member'), async (req, res) => {
-    // เราดึงแค่ 4 ค่า (ไม่สน role ที่ส่งมา)
-    const { username, password, first_name, last_name } = req.body;
-    
-    if (!username || !password || !first_name || !last_name) {
-        req.flash('error', 'กรุณากรอกข้อมูลให้ครบถ้วน');
-        return res.redirect('/member-list'); // กลับไปหน้า member list
-    }
-    
-    try {
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-        
-        // [สำคัญ] เราบังคับ Role เป็น 'member' ที่นี่
-        const newUser = {
-            username: username,
-            password: hashedPassword,
-            first_name: first_name,
-            last_name: last_name,
-            role: 'member' // บังคับ Role
-        };
-
-        const sql = 'INSERT INTO users SET ?';
-        
-        db.query(sql, newUser, (err, result) => {
-            if (err) {
-                if (err.code === 'ER_DUP_ENTRY') {
-                    req.flash('error', `Username '${username}' ถูกใช้แล้ว`);
-                } else {
-                    console.error(err);
-                    req.flash('error', 'เกิดข้อผิดพลาดในการเพิ่มข้อมูล');
-                }
-            } else {
-                req.flash('success', `✅ เพิ่ม Member **${username}** สำเร็จแล้ว`);
-            }
-            res.redirect('/member-list'); // กลับไปหน้า member list
-        });
-    } catch (error) {
-        console.error(error);
-        req.flash('error', 'เกิดข้อผิดพลาดในการเข้ารหัสรหัสผ่าน');
-        res.redirect('/member-list');
-    }
-});
-
-// --- 7. Admin Routes ---
-
-// 7.1 Admin CRUD Users
-app.get('/admin/manage-users', isAuthenticated, isAdmin, (req, res) => { 
-    const searchQuery = req.query.search ? `%${req.query.search}%` : '%';
-    const sql = `
-        SELECT id, username, first_name, last_name, role 
-        FROM users 
-        WHERE first_name LIKE ? OR last_name LIKE ? OR username LIKE ?
-        ORDER BY id DESC`;
-
-    db.query(sql, [searchQuery, searchQuery, searchQuery], (err, users) => {
-        if (err) {
-            console.error(err);
-            req.flash('error', 'เกิดข้อผิดพลาดในการดึงข้อมูล');
-            users = [];
-        }
-        
-        res.render('manage_users', { 
-            user: req.session.user, 
-            users: users, 
-            searchQuery: req.query.search || '',
-            messages: { // ส่ง Flash message แบบที่ EJS คาดหวัง
-                success: req.flash('success')[0],
-                error: req.flash('error')[0]
-            }
-        });
-    });
-});
-
-app.post('/admin/add-user', isAuthenticated, isAdmin, async (req, res) => {
-    const { username, password, first_name, last_name, role } = req.body;
-    
-    if (!username || !password || !first_name || !last_name || !role) {
-        req.flash('error', 'กรุณากรอกข้อมูลให้ครบถ้วน');
-        return res.redirect('/admin/manage-users');
-    }
-    
-    try {
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-        const sql = 'INSERT INTO users (username, password, first_name, last_name, role) VALUES (?, ?, ?, ?, ?)';
-        
-        db.query(sql, [username, hashedPassword, first_name, last_name, role], (err, result) => {
-            if (err) {
-                if (err.code === 'ER_DUP_ENTRY') {
-                    req.flash('error', `ไม่สามารถเพิ่มผู้ใช้ได้: Username '${username}' ถูกใช้แล้ว`);
-                } else {
-                    console.error(err);
-                    req.flash('error', 'เกิดข้อผิดพลาดในการเพิ่มข้อมูล');
-                }
-            } else {
-                req.flash('success', `เพิ่มผู้ใช้งาน **${username}** (Role: ${role.toUpperCase()}) สำเร็จแล้ว`);
-            }
-            res.redirect('/admin/manage-users');
-        });
-    } catch (error) {
-        console.error(error);
-        req.flash('error', 'เกิดข้อผิดพลาดในการเข้ารหัสรหัสผ่าน');
-        res.redirect('/admin/manage-users');
-    }
-});
-
-app.post('/admin/edit-user/:id', isAuthenticated, isAdmin, async (req, res) => {
-    const userId = req.params.id;
-    const { first_name, last_name, password, role } = req.body;
-
-    let updateFields = ['first_name = ?', 'last_name = ?', 'role = ?'];
-    let queryValues = [first_name, last_name, role];
-
-    if (password) {
-        try {
-            const hashedPassword = await bcrypt.hash(password, saltRounds);
-            updateFields.push('password = ?');
-            queryValues.push(hashedPassword);
-        } catch (error) {
-            console.error(error);
-            req.flash('error', 'เกิดข้อผิดพลาดในการเข้ารหัสรหัสผ่าน');
-            return res.redirect('/admin/manage-users');
-        }
-    }
-    
-    queryValues.push(userId); // เพิ่ม ID ไว้ท้ายสุดสำหรับเงื่อนไข WHERE
-
-    const sql = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
-
-    db.query(sql, queryValues, (err, result) => {
-        if (err) {
-            console.error(err);
-            req.flash('error', 'เกิดข้อผิดพลาดในการแก้ไขข้อมูล');
-        } else {
-            req.flash('success', `แก้ไขข้อมูลผู้ใช้งาน ID: **${userId}** สำเร็จแล้ว`);
-        }
-        res.redirect('/admin/manage-users');
-    });
-});
-
-app.post('/admin/delete-user/:id', isAuthenticated, isAdmin, (req, res) => {
-    const userId = req.params.id;
-
-    const sql = 'DELETE FROM users WHERE id = ?';
-    db.query(sql, [userId], (err, result) => {
-        if (err) {
-            console.error(err);
-            req.flash('error', 'เกิดข้อผิดพลาดในการลบข้อมูล');
-        } else if (result.affectedRows === 0) {
-            req.flash('error', 'ไม่พบผู้ใช้งานที่ต้องการลบ');
-        } else {
-            req.flash('success', `❌ ลบผู้ใช้งาน ID: **${userId}** สำเร็จแล้ว`);
-        }
-        res.redirect('/admin/manage-users');
-    });
-});
-
-
-// 7.2 Admin Manage Permissions (หน้า Checkbox)
-app.get('/admin/manage-permissions', isAuthenticated, isAdmin, (req, res) => {
-    
-    // 1. ดึงสิทธิ์ทั้งหมดที่มีในระบบ
-    const sqlPerms = "SELECT * FROM permissions ORDER BY id";
-    
-    // 2. ดึงสิทธิ์ที่ตั้งค่าไว้
-    const sqlRoles = "SELECT * FROM role_permissions";
-
-    db.query(sqlPerms, (err, allPermissions) => {
-        if (err) {
-            console.error(err);
-            req.flash('error', 'ไม่สามารถดึงข้อมูลสิทธิ์ได้');
-            return res.redirect('/dashboard');
-        }
-        
-        db.query(sqlRoles, (err, rolePerms) => {
-            if (err) {
-                console.error(err);
-                req.flash('error', 'ไม่สามารถดึงข้อมูล Role ได้');
-                return res.redirect('/dashboard');
-            }
-
-            // แปลงข้อมูล [ {role: 'staff', permission_id: 1}, ... ]
-            // ให้เป็น { staff: [1, 4], member: [1] }
-            const currentSettings = {};
-            rolePerms.forEach(row => {
-                if (!currentSettings[row.role]) {
-                    currentSettings[row.role] = [];
-                }
-                currentSettings[row.role].push(row.permission_id);
-            });
-
-            res.render('manage_permissions', {
-                user: req.session.user,
-                allPermissions: allPermissions,
-                currentSettings: currentSettings
-                // messages ถูกส่งไปโดย isAuthenticated
-            });
-        });
-    });
-});
-
-app.post('/admin/manage-permissions/update', isAuthenticated, isAdmin, (req, res) => {
-    // req.body.permissions จะหน้าตาแบบนี้: { staff: ['1', '4'], member: ['1'] }
-    const settings = req.body.permissions || {}; // ป้องกันกรณีส่งค่าว่าง
-    const rolesToUpdate = ['staff', 'member']; // Role ที่เราอนุญาตให้อัปเดต
-
-    // 1. ลบค่าเก่าของ Role ที่อัปเดต
-    const sqlDelete = "DELETE FROM role_permissions WHERE role IN (?)";
-    db.query(sqlDelete, [rolesToUpdate], (err, result) => {
-        if (err) {
-            console.error(err);
-            req.flash('error', 'เกิดข้อผิดพลาดในการลบสิทธิ์เดิม');
-            return res.redirect('/admin/manage-permissions');
-        }
-
-        // 2. สร้างข้อมูลใหม่
-        const newValues = [];
-        rolesToUpdate.forEach(role => {
-            // ตรวจสอบว่ามี key นี้ใน settings หรือไม่
-            if (settings[role] && Array.isArray(settings[role])) {
-                settings[role].forEach(permId => {
-                    newValues.push([role, parseInt(permId)]); // [ ['staff', 1], ['staff', 4], ['member', 1] ]
-                });
-            }
-        });
-
-        if (newValues.length === 0) {
-            req.flash('success', 'ลบสิทธิ์ทั้งหมดของ Staff/Member สำเร็จ (ไม่มีสิทธิ์ใดถูกเลือก)');
-            return res.redirect('/admin/manage-permissions');
-        }
-
-        // 3. บันทึกค่าใหม่
-        const sqlInsert = "INSERT INTO role_permissions (role, permission_id) VALUES ?";
-        db.query(sqlInsert, [newValues], (err, result) => {
-            if (err) {
-                console.error(err);
-                req.flash('error', 'เกิดข้อผิดพลาดในการบันทึกสิทธิ์ใหม่');
-                return res.redirect('/admin/manage-permissions');
-            }
-
-            req.flash('success', 'อัปเดตสิทธิ์การเข้าถึงสำเร็จ');
-            res.redirect('/admin/manage-permissions');
-        });
-    });
-});
-
-
-// --- 8. Product Test Routes ---
-
-// 8.1 GET: แสดงหน้าฟอร์ม
-app.get('/products', isAuthenticated, checkPermission('add_products'), (req, res) => {
-    // (เราใช้ isAuthenticated เพื่อให้รู้ว่าใครกดส่ง)
-    // (messages จะถูกส่งไปโดย isAuthenticated middleware อัตโนมัติ)
-    res.render('products/products_list', { 
-        user: req.session.user 
-    });
-});
-
-// 8.2 POST: รับข้อมูลจากฟอร์ม EJS และส่งไป n8n
-// ใน app.js:
-
-// ... (ส่วน import axios) ...
-
-app.post('/products/add', isAuthenticated, async (req, res) => {
-    
-    // 1. [สำคัญ] req.body ที่มาจากฟอร์มของคุณ
-    const { productName, price } = req.body;
-    
-    const N8N_WEBHOOK_URL = 'http://localhost:5678/webhook-test/d5fa26ee-9be9-48c9-bf91-03b0cf8fcb94'; // <-- ใช้ Production URL
-
-    // 2. [สำคัญ] สร้าง Array เปล่าเพื่อแปลงข้อมูล
-    const products = [];
-
-    // 3. ตรวจสอบว่า productName เป็น Array (เพราะฟอร์มใช้ productName[])
-    if (productName && Array.isArray(productName)) {
-        
-        // วนลูปตามจำนวนสินค้าที่ส่งมา
-        for (let i = 0; i < productName.length; i++) {
-            
-            // ตรวจสอบว่ามีข้อมูลทั้งสองช่อง
-            if (productName[i] && price[i]) {
-                products.push({
-                    productName: productName[i],
-                    price: price[i]
-                });
-            }
-        }
-    }
-
-    // 4. ตรวจสอบว่ามีสินค้าที่แปลงแล้วหรือไม่
-    if (products.length === 0) {
-        req.flash('error', 'ไม่พบข้อมูลสินค้าที่จะส่ง หรือข้อมูลไม่ครบถ้วน');
-        return res.redirect('/products');
-    }
-
-    try {
-        // 5. [สำคัญมาก] ส่ง Array ที่แปลงแล้วทั้งก้อน 
-        // ภายใต้ key ชื่อ "products" ไปที่ n8n
-        await axios.post(N8N_WEBHOOK_URL, {
-            products: products // n8n จะได้รับ: { "products": [{...}, {...}, {...}] }
-        });
-        
-        req.flash('success', `เพิ่มสินค้า ${products.length} รายการ สำเร็จ!`);
-        res.redirect('/products');
-
-    } catch (error) {
-        console.error('Error sending to n8n:', error.message);
-        req.flash('error', 'เกิดข้อผิดพลาดในการส่งข้อมูลไป n8n');
-        res.redirect('/products');
-    }
-});
+// 4.2 Routes ที่ต้อง Login (ใช้ isAuthenticated)
+app.use('/', isAuthenticated, mainRoutes); // ( /dashboard, /profile )
+app.use('/products', isAuthenticated, checkPermission('add_products'), productRoutes); // ( /products, /products/add )
+app.use('/admin', isAuthenticated, isAdmin, adminRoutes); // ( /admin/manage-users, ... )
+app.use('/member', isAuthenticated, checkPermission('view_member_list'), memberRoutes);
 
 // --- 9. Server Start ---
 app.listen(port, () => {
