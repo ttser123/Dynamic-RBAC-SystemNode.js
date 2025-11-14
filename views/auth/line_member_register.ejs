@@ -1,0 +1,137 @@
+<%
+    // [แก้ไข] เปลี่ยนคลาส BS5 เป็น BS4
+    const body_content = `
+        <div class="card shadow-sm mt-5">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">สมัครสมาชิก - กรอกข้อมูลส่วนตัว</h3>
+            </div>
+            <div class="card-body p-4">
+                <p class="text-muted"><small>ชื่อไลน์ของคุณ: <strong>${lineDisplayName}</strong></small></p>
+                
+                <form id="lineRegisterForm">
+                    <div class="form-group">
+                        <label for="username">Username (สำหรับล็อกอิน)</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="password">รหัสผ่าน</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="confirm_password">ยืนยันรหัสผ่าน</label>
+                            <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group form-check">
+                        <input type="checkbox" class="form-check-input" id="showPasswords">
+                        <label class="form-check-label" for="showPasswords">ดูรหัส</label>
+                    </div>
+                    
+                    <hr>
+
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="first_name">ชื่อ</label>
+                            <input type="text" class="form-control" id="first_name" name="first_name" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="last_name">นามสกุล</label>
+                            <input type="text" class="form-control" id="last_name" name="last_name" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="address">ที่อยู่</label>
+                        <textarea class="form-control" id="address" name="address" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="phone_number">เบอร์โทรศัพท์</label>
+                        <input type="tel" class="form-control" id="phone_number" name="phone_number">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-block" id="registerBtn">
+                        <i class="fas fa-user-plus"></i> สมัครสมาชิก
+                    </button>
+                </form>
+                
+                <hr>
+                <p class="text-center text-muted"><small>บัญชีของคุณจะเชื่อมกับ LINE ID สำหรับการติดต่อในอนาคต</small></p>
+            </div>
+        </div>
+    `;
+
+    // [แก้ไข] เปลี่ยน Vanilla JS เป็น jQuery
+    const script_content = `
+        <script>
+            $(document).ready(function() {
+                $('#lineRegisterForm').on('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    const registerBtn = $('#registerBtn');
+                    registerBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> กำลังสมัครสมาชิก...');
+                    
+                    const pwd = $('#password').val();
+                    const confirm = $('#confirm_password').val();
+
+                    if (pwd !== confirm) {
+                        Toast.fire({ icon: 'error', title: 'รหัสผ่านไม่ตรงกัน' });
+                        registerBtn.prop('disabled', false).html('<i class="fas fa-user-plus"></i> สมัครสมาชิก');
+                        return;
+                    }
+
+                    const data = {
+                        username: $('#username').val(),
+                        password: pwd,
+                        confirm_password: confirm,
+                        first_name: $('#first_name').val(),
+                        last_name: $('#last_name').val(),
+                        address: $('#address').val() || '',
+                        phone_number: $('#phone_number').val() || ''
+                    };
+
+                    try {
+                        const response = await fetch('/auth/line/register', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        const result = await response.json();
+                        if (!response.ok) { throw new Error(result.message); }
+                        
+                        Toast.fire({
+                            icon: 'success',
+                            title: result.message || 'สมัครสมาชิกสำเร็จ',
+                            timer: 1000
+                        });
+                        setTimeout(() => {
+                            window.location.href = result.redirect || '/dashboard';
+                        }, 1000);
+                    } catch (error) {
+                        Toast.fire({
+                            icon: 'error',
+                            title: error.message || 'เกิดข้อผิดพลาด'
+                        });
+                        registerBtn.prop('disabled', false).html('<i class="fas fa-user-plus"></i> สมัครสมาชิก');
+                    }
+                });
+
+                $('#showPasswords').on('change', function() {
+                    var t = $(this).is(':checked') ? 'text' : 'password';
+                    $('#password').attr('type', t);
+                    $('#confirm_password').attr('type', t);
+                });
+            });
+        </script>
+    `;
+%>
+
+<%- include('../partials/layout', { 
+    title: 'สมัครสมาชิก - LINE', 
+    user: null, 
+    body: body_content, 
+    script: script_content 
+}) %>

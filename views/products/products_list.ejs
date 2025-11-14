@@ -1,38 +1,36 @@
 <% 
-    // 1. เนื้อหา Body (เหมือนเดิม)
     const body_content = `
         <h2 class="mb-4"><i class="fas fa-box"></i> เพิ่มสินค้า (Test n8n)</h2>
         
-        <form id="productForm"> <div class="card">
-                <div class="card-header">
-                    กรอกข้อมูลสินค้า (สามารถเพิ่มหลายรายการได้)
+        <form id="productForm">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <p class="h5 mb-0">กรอกข้อมูลสินค้า (สามารถเพิ่มหลายรายการได้)</p>
                 </div>
                 
                 <div class="card-body" id="product-list-container">
-                    <div class="row product-row mb-2">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label>ชื่อสินค้า</label>
-                                <input type="text" class="form-control" name="productName[]" required>
-                            </div>
+                    <div class="form-row product-row mb-2">
+                        <div class="col-md-5">
+                            <label>ชื่อสินค้า</label>
+                            <input type="text" class="form-control" name="productName[]" required>
                         </div>
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label>ราคา</label>
-                                <input type="number" class="form-control" name="price[]" required>
-                            </div>
+                        <div class="col-md-5">
+                            <label>ราคา</label>
+                            <input type="number" class="form-control" name="price[]" required>
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
-                            </div>
+                            <button type="button" class="btn btn-danger btn-block remove-product-row" style="display: none;">
+                                <i class="fas fa-trash"></i> ลบ
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 <div class="card-footer d-flex justify-content-between">
-                    <button type="button" class="btn btn-secondary" id="add-product-row">
-                        <i class="fas fa-plus"></i> เพิ่มรายการ
+                    <button type="button" class="btn btn-success" id="add-product-row">
+                        <i class="fas fa-plus"></i> เพิ่มแถว
                     </button>
-                    
-                    <button type="submit" class="btn btn-primary" id="productSubmitBtn">
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
                         <i class="fas fa-paper-plane"></i> ส่งข้อมูลทั้งหมด
                     </button>
                 </div>
@@ -40,38 +38,40 @@
         </form>
     `;
 
-    // 2. สคริปต์ AJAX
+    // (สคริปต์ jQuery/Fetch เดิมของคุณ ใช้งานได้เลย)
     const script_content = `
         <script>
-            // (โค้ด "เพิ่ม/ลบ" แถว เหมือนเดิม)
-            document.getElementById('add-product-row').addEventListener('click', function() {
-                const container = document.getElementById('product-list-container');
-                const newRow = document.createElement('div');
-                newRow.className = 'row product-row mb-2';
-                newRow.innerHTML = \`
-                    <div class="col-md-6"><div class="form-group"><input type="text" class="form-control" name="productName[]" placeholder="ชื่อสินค้า" required></div></div>
-                    <div class="col-md-4"><div class="form-group"><input type="number" class="form-control" name="price[]" placeholder="ราคา" required></div></div>
-                    <div class="col-md-2 d-flex align-items-center"><button type="button" class="btn btn-danger btn-sm remove-row-btn"><i class="fas fa-trash"></i> ลบ</button></div>
-                \`;
-                container.appendChild(newRow);
-            });
-            document.getElementById('product-list-container').addEventListener('click', function(e) {
-                if (e.target.closest('.remove-row-btn')) {
-                    e.target.closest('.product-row').remove();
-                }
+            function updateRemoveButtons() {
+                const rows = $('#product-list-container .product-row');
+                rows.each(function(index, row) {
+                    const removeBtn = $(row).find('.remove-product-row');
+                    if (index === 0) {
+                        removeBtn.hide(); // ซ่อนปุ่มลบแถวแรก
+                    } else {
+                        removeBtn.show();
+                    }
+                });
+            }
+
+            $('#add-product-row').on('click', function() {
+                const firstRow = $('#product-list-container .product-row').first();
+                const newRow = firstRow.clone();
+                newRow.find('input').val(''); // ล้างค่า
+                $('#product-list-container').append(newRow);
+                updateRemoveButtons();
             });
 
-            // [อัปเดต!] สคริปต์ AJAX สำหรับส่งฟอร์ม
+            $('#product-list-container').on('click', '.remove-product-row', function() {
+                $(this).closest('.product-row').remove();
+                updateRemoveButtons();
+            });
+
             $('#productForm').on('submit', async function(e) {
                 e.preventDefault();
-                
-                const btn = $('#productSubmitBtn');
+                const btn = $(this).find('#submitBtn');
                 btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> กำลังส่ง...');
                 
-                // FormData จะจัดการ Array (productName[]) ให้อัตโนมัติ
                 const formData = new FormData(this);
-                // แต่ axios (ใน routes/product.js) คาดหวัง JSON
-                // เราต้องแปลง FormData เป็น Object ที่ถูกต้อง
                 const data = {
                     productName: formData.getAll('productName[]'),
                     price: formData.getAll('price[]')
@@ -86,12 +86,12 @@
                     const result = await response.json();
                     if (!response.ok) { throw new Error(result.message); }
 
-                    // [สำเร็จ]
                     Toast.fire({ icon: 'success', title: result.message });
                     
                     // ล้างฟอร์ม (เหลือแถวแรกแถวเดียว)
                     $('#product-list-container').children('.product-row:not(:first)').remove();
                     $(this)[0].reset();
+                    updateRemoveButtons();
 
                 } catch (error) {
                     Toast.fire({ icon: 'error', title: error.message });
@@ -99,6 +99,8 @@
                     btn.prop('disabled', false).html('<i class="fas fa-paper-plane"></i> ส่งข้อมูลทั้งหมด');
                 }
             });
+
+            updateRemoveButtons(); // เรียกครั้งแรกตอนโหลด
         </script>
     `;
 %>

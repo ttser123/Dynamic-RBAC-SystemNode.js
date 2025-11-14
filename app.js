@@ -77,6 +77,7 @@ const checkPermission = (requiredPermissionKey) => {
 
 // --- 4. Import & Use Routes ---
 const authRoutes = require('./routes/auth')(db, bcrypt);
+const lineAuthRoutes = require('./routes/line_auth')(db);
 const mainRoutes = require('./routes/main')(db, bcrypt);
 const memberRoutes = require('./routes/member')(db);
 const adminRoutes = require('./routes/admin')(db, bcrypt);
@@ -84,6 +85,7 @@ const productRoutes = require('./routes/product')(); // (ไฟล์นี้�
 
 // 4.1 Routes ที่ไม่ต้อง Login
 app.use('/', authRoutes); // ( /login, /logout, /auth )
+app.use('/auth', lineAuthRoutes); // ( /auth/line/login, /auth/line/callback, /auth/line/register )
 
 // 4.2 Routes ที่ต้อง Login (ใช้ isAuthenticated)
 app.use('/', isAuthenticated, mainRoutes); // ( /dashboard, /profile )

@@ -7,10 +7,10 @@ dotenv.config();
 // สร้าง Connection Pool (ดีกว่า createConnection สำหรับ production)
 const pool = mysql.createPool({
     connectionLimit: 10, // ปรับตามความเหมาะสม
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'crud_db'
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME
 });
 
 // ตรวจสอบการเชื่อมต่อครั้งแรก

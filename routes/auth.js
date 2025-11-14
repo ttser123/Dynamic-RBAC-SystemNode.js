@@ -6,7 +6,7 @@ const saltRounds = 10;
 module.exports = (db, bcrypt) => {
 
     router.get('/login', (req, res) => {
-        res.render('login'); // <-- ไม่ต้องส่ง message
+        res.render('auth/login'); // <-- ไม่ต้องส่ง message
     });
 
     // [อัปเดต!] เปลี่ยนเป็น AJAX/JSON

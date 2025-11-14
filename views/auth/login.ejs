@@ -1,0 +1,104 @@
+<%
+    // [แก้ไข] เปลี่ยนคลาส BS5 เป็น BS4
+    const body_content = `
+        <div class="card shadow-sm mt-5">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">กรุณาเข้าสู่ระบบ</h3>
+            </div>
+            <div class="card-body p-4">
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="form-group form-check">
+                        <input type="checkbox" class="form-check-input" id="showPassword">
+                        <label class="form-check-label" for="showPassword">ดูรหัส</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+                        Login
+                    </button>
+                </form>
+                
+                <hr>
+                
+                <p class="text-center text-muted mb-3"><small>หรือ</small></p>
+                
+                <a href="/auth/line/login" class="btn btn-success btn-block" style="background-color: #00B900; border-color: #00B900;">
+                    <i class="fab fa-line"></i> ลงทะเบียนด้วย LINE
+                </a>
+            </div>
+        </div>
+    `;
+
+    // [แก้ไข] เปลี่ยน Vanilla JS เป็น jQuery
+    const script_content = `
+        <script>
+            $(document).ready(function() {
+                // (Toast ถูกติดตั้งแล้วใน layout.ejs)
+                
+                const loginForm = $('#loginForm');
+                const loginBtn = $('#loginBtn');
+                const passwordInput = $('#password');
+
+                loginForm.on('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    loginBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> กำลังเข้าสู่ระบบ...');
+
+                    const data = {
+                        username: $('#username').val(),
+                        password: passwordInput.val()
+                    };
+
+                    try {
+                        const response = await fetch('/auth', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+
+                        const result = await response.json();
+                        if (!response.ok) {
+                            throw new Error(result.message);
+                        }
+
+                        Toast.fire({
+                            icon: 'success',
+                            title: 'เข้าสู่ระบบสำเร็จ',
+                            timer: 1000
+                        });
+                        
+                        setTimeout(() => {
+                            window.location.href = result.redirect; // <-- ไปยัง /dashboard
+                        }, 1000);
+
+                    } catch (error) {
+                        Toast.fire({
+                            icon: 'error',
+                            title: error.message || 'เกิดข้อผิดพลาด'
+                        });
+                        loginBtn.prop('disabled', false).html('Login');
+                    }
+                });
+
+                // Toggle show password
+                $('#showPassword').on('change', function() {
+                    const type = $(this).is(':checked') ? 'text' : 'password';
+                    passwordInput.attr('type', type);
+                });
+            });
+        </script>
+    `;
+%>
+
+<%- include('../partials/layout', { 
+    title: 'Login', 
+    user: null, 
+    body: body_content, 
+    script: script_content 
+}) %>
