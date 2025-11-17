@@ -36,6 +36,7 @@ const isAuthenticated = (req, res, next) => {
     if (req.session.loggedin) {
         // [คลีน] ส่งแค่ user
         res.locals.user = req.session.user;
+        res.locals.cart = req.session.cart || [];
         next();
     } else {
         // ถ้าเป็น AJAX request ที่ยังไม่ login, ให้ตอบ JSON Error

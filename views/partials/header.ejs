@@ -8,12 +8,21 @@
     <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ml-auto d-flex align-items-center">
             
-            <li class="nav-item">
-                <span class="navbar-text mr-3">
-                    สวัสดี, <strong><%= user.first_name %></strong> (<%= user.role.toUpperCase() %>)
-                </span>
-            </li>
+            <!-- แสดงรูปโปรไฟล์และชื่อผู้ใช้ -->
+            <% if (user) { %>
+                <li class="nav-item">
+                    <span class="navbar-text mr-3 d-flex align-items-center">
+                        <!-- รูปโปรไฟล์ -->
+                        <img src="<%= user.profile_picture_url || '/images/default_profile.png' %>" alt="Profile" class="rounded-circle" style="width: 30px; height: 30px; object-fit: cover; margin-right: 10px;">
+                        <!-- ชื่อ -->
+                        สวัสดี, <strong><%= user.first_name || user.username %></strong> (<%= user.role.toUpperCase() %>)
+                    </span>
+                </li>
+            <% } %>
+            <!-- สิ้นสุดการแสดงรูปโปรไฟล์และชื่อผู้ใช้ -->
 
+            <% if (user) { %>
+            <!-- ถ้า Login แล้ว -->
             <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                     <i class="fas fa-bars"></i> เมนูหลัก
@@ -25,7 +34,7 @@
                         <a class="dropdown-item" href="/admin/manage-users">
                             <i class="fas fa-users-cog"></i> จัดการผู้ใช้งาน
                         </a>
-                        <a class="dropdown-item" href="/admin/manage-permissions">
+                        <a class="dropdown-item" href="/admin/permissions">
                             <i class="fas fa-shield-alt"></i> ตั้งค่าสิทธิ์
                         </a>
                         <div class="dropdown-divider"></div>
@@ -38,11 +47,23 @@
                         </a>
                     <% } %>
 
-                    <!-- เมนู Product -->
+                    <!-- (แก้ไข!) เมนู Product (แยกสิทธิ์) -->
+
+                    <!-- 1. (สำหรับ Admin/Staff) ลิงก์ "เพิ่มสินค้า" -->
                     <% if (user.role === 'admin' || user.permissions.includes('add_products')) { %>
                         <a class="dropdown-item" href="/products">
                             <i class="fas fa-plus"></i> เพิ่มสินค้า (n8n)
                         </a>
+                    <% } %>
+
+                    <!-- 2. (สำหรับ Member ทุกคนที่ Login) ลิงก์ "ดูรายการสินค้า" -->
+                    <!-- (ย้ายลิงก์นี้ออกมานอก if 'add_products') -->
+                    <a class="dropdown-item" href="/products/all">
+                        <i class="fas fa-list-ul"></i> ดูรายการสินค้า
+                    </a>
+
+                    <!-- 3. (ย้าย) Divider จะแสดงเฉพาะถ้ามีสิทธิ์ 'add_products' -->
+                    <% if (user.role === 'admin' || user.permissions.includes('add_products')) { %>
                         <div class="dropdown-divider"></div>
                     <% } %>
                     
@@ -53,11 +74,34 @@
                 </div>
             </li>
 
+            <!-- (เพิ่ม) ไอคอนตะกร้าสินค้า -->
+            <li class="nav-item">
+                <!-- (แก้ไข) เปลี่ยนลิงก์ไปหน้า Cart -->
+                <a class="nav-link" href="/products/cart" style="position: relative; color: white;">
+                    <i class="fas fa-shopping-cart fa-lg"></i>
+                    <span class="badge badge-danger" id="cart-item-count" style="position: absolute; top: 0px; right: -5px; font-size: 0.65rem;">
+                        <!-- ตัวเลขนี้จะถูกอัปเดตโดย Script (หรือ Server ถ้าตั้งค่า res.locals) -->
+                        <%= (typeof cart !== 'undefined' ? cart.length : 0) %>
+                    </span>
+                </a>
+            </li>
+            <!-- (สิ้นสุด) ไอคอนตะกร้าสินค้า -->
+
             <li class="nav-item">
                 <a href="/logout" class="btn btn-outline-danger my-2 my-sm-0 ml-2">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
             </li>
+            
+            <% } else { %>
+            <!-- ถ้ายังไม่ Login -->
+            <li class="nav-item">
+                <a href="/login" class="btn btn-outline-primary my-2 my-sm-0 ml-2">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </a>
+            </li>
+            <% } %>
+
         </ul>
     </div>
 </nav>

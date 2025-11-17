@@ -54,9 +54,15 @@ module.exports = (db, bcrypt) => {
                             role: user.role,
                             first_name: userProfile.first_name,
                             last_name: userProfile.last_name,
-                            permissions: userPermissions
+                            permissions: userPermissions,
+                            
+                            // ---- (เพิ่มส่วนที่ขาดหายไป) ----
+                            profile_picture_url: userProfile.profile_picture_url || null,
+                            address: userProfile.address || null,
+                            phone_number: userProfile.phone_number || null,
+                            employee_code: userProfile.employee_code || null
                         };
-                        
+
                         // [อัปเดต] ตอบ JSON กลับไป ให้ Client เปลี่ยนหน้าเอง
                         res.json({ success: true, redirect: '/dashboard' });
                     });

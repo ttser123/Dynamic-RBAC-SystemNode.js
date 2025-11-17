@@ -1,0 +1,78 @@
+<%
+    let body_content = `
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="fas fa-box-open"></i> รายการสินค้า (ดึงจาก Google Sheet)</h4>
+            </div>
+            <div class="card-body">
+    `;
+
+    // แสดง Error
+    if (typeof error !== 'undefined' && error) {
+        body_content += `
+            <div class="alert alert-danger">
+                <strong>เกิดข้อผิดพลาด:</strong> ${error}
+                <br>
+                <small>โปรดตรวจสอบการตั้งค่า N8N_GET_PRODUCTS_URL และ workflow ใน n8n</small>
+            </div>
+        `;
+    }
+    else if (products && products.length > 0) {
+
+        body_content += `<p>พบสินค้าทั้งหมด ${products.length} รายการ</p>`;
+
+        body_content += `
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>#ID</th>
+                            <th>ชื่อสินค้า</th>
+                            <th>ราคา</th>
+                            <th>จำนวน</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        products.forEach(product => {
+            body_content += `
+                <tr>
+                    <td>${product.row_number || 'N/A'}</td>
+                    <td>${product.productName || 'N/A'}</td>
+                    <td>${product.price || 'N/A'}</td>
+                    <td>${product.stock || 0}</td>
+                </tr>
+            `;
+        });
+
+        body_content += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    else {
+        body_content += `
+            <div class="alert alert-info">
+                ไม่พบข้อมูลสินค้าใน Google Sheet
+            </div>
+        `;
+    }
+
+    body_content += `
+            </div>
+        </div>
+    `;
+
+    const script_content = `
+        <!-- no script -->
+    `;
+%>
+
+<%- include('../partials/layout', { 
+    title: 'รายการสินค้า', 
+    user: user, 
+    body: body_content, 
+    script: script_content 
+}) %>

@@ -1,4 +1,17 @@
 <%
+    // ----------------------------------------------------------------------
+    // แก้ไข: สร้าง HTML ส่วนรูปโปรไฟล์แยกออกมาเพื่อหลีกเลี่ยง Error การซ้อนกันของ EJS Tag ใน String Template
+    // ----------------------------------------------------------------------
+    let profilePictureHtml = '';
+    const profileImageUrl = user.profile_picture_url || '/images/default_profile.png'; // ใช้รูปภาพเริ่มต้นถ้าไม่มี
+    
+    // HTML สำหรับแสดงรูปภาพ
+    profilePictureHtml = `
+        <img id="currentProfilePic" src="${profileImageUrl}" alt="${user.first_name} Profile" class="rounded-circle mb-3 shadow-lg" style="width: 120px; height: 120px; object-fit: cover; border: 4px solid #007bff;">
+    `;
+    // ----------------------------------------------------------------------
+
+
     const body_content = `
         <div class="row justify-content-center">
             <div class="col-md-8">
@@ -7,7 +20,16 @@
                         <i class="fas fa-user-edit"></i> แก้ไขข้อมูลส่วนตัว
                     </div>
                     <div class="card-body">
-                        <form id="profileForm"> <div class="form-group">
+                        <!-- ส่วนแสดงรูปโปรไฟล์ -->
+                        <div class="text-center mb-5">
+                            ${profilePictureHtml} <!-- ใช้ตัวแปรที่สร้างไว้ด้านบน -->
+                            <h4 class="mb-0">${user.first_name} ${user.last_name}</h4>
+                            <p class="text-muted">${user.role.toUpperCase()}</p>
+                        </div>
+                        <!-- สิ้นสุดส่วนแสดงรูปโปรไฟล์ -->
+
+                        <form id="profileForm" enctype="multipart/form-data"> <!-- (enctype ยังคงสำคัญ) -->
+                            <div class="form-group">
                                 <label>Username (ไม่สามารถแก้ไขได้)</label>
                                 <input type="text" class="form-control" value="${user.username}" disabled>
                             </div>
@@ -21,6 +43,24 @@
                                     <input type="text" class="form-control" id="last_name" name="last_name" value="${user.last_name}" required>
                                 </div>
                             </div>
+                            
+                            <!-- เปลี่ยนเป็นฟิลด์ File Upload -->
+                            <div class="form-group">
+                                <label for="profile_picture_file">อัปโหลดรูปโปรไฟล์</label>
+                                <div class="input-group">
+                                    <div class="custom-file">
+                                        <input type="file" class="custom-file-input" id="profile_picture_file" name="profile_picture_file" accept="image/*">
+                                        <label class="custom-file-label" for="profile_picture_file" id="fileLabel">เลือกไฟล์...</label>
+                                    </div>
+                                    <div class="input-group-append">
+                                        <button class="btn btn-outline-secondary" type="button" id="clearFileBtn" style="display: none;">ล้าง</button>
+                                    </div>
+                                </div>
+                                <small class="form-text text-muted">เลือกไฟล์รูปภาพเพื่ออัปโหลด (ถ้าเลือก จะแทนที่ URL เดิม)</small>
+                                <input type="hidden" id="existing_profile_url" name="existing_profile_url" value="${user.profile_picture_url || ''}">
+                            </div>
+                            <!-- สิ้นสุดฟิลด์ File Upload -->
+
                             <hr>
                             <div class="form-group">
                                 <label for="password">รหัสผ่านใหม่</label>
@@ -41,35 +81,79 @@
     // [AJAX] เพิ่ม script สำหรับ Fetch
     const script_content = `
         <script>
+            // (ลบฟังก์ชัน readFileAsBase64 ออก - ไม่จำเป็นแล้ว)
+
+            // 1. จัดการการเลือกไฟล์และแสดงตัวอย่าง
+            $('#profile_picture_file').on('change', function(e) {
+                const fileName = e.target.files.length ? e.target.files[0].name : 'เลือกไฟล์...';
+                $('#fileLabel').text(fileName);
+                
+                // แสดงปุ่มล้างไฟล์
+                if (e.target.files.length) {
+                    $('#clearFileBtn').show();
+                } else {
+                    $('#clearFileBtn').hide();
+                }
+
+                // แสดงตัวอย่างรูปภาพ (ยังคงใช้ FileReader สำหรับ *ตัวอย่าง* เท่านั้น)
+                if (e.target.files && e.target.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = function(r) {
+                        $('#currentProfilePic').attr('src', r.target.result);
+                    }
+                    reader.readAsDataURL(e.target.files[0]);
+                } else {
+                    // กลับไปใช้รูปภาพเดิมหรือ default
+                    const existingUrl = $('#existing_profile_url').val() || '/images/default_profile.png';
+                    $('#currentProfilePic').attr('src', existingUrl);
+                }
+            });
+
+            // 2. จัดการปุ่มล้างไฟล์
+            $('#clearFileBtn').on('click', function() {
+                $('#profile_picture_file').val(''); // เคลียร์ input file
+                $('#profile_picture_file').trigger('change'); // trigger change event
+            });
+
+            // 3. จัดการ Form Submit
             $('#profileForm').on('submit', async function(e) {
                 e.preventDefault();
                 
                 const btn = $('#profileSubmitBtn');
                 btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...');
-
-                const data = {
-                    first_name: $('#first_name').val(),
-                    last_name: $('#last_name').val(),
-                    password: $('#password').val() || null // ส่ง null ถ้าว่าง
-                };
+                
+                // (สำคัญ) ใช้ FormData ในการส่งข้อมูล
+                const formData = new FormData(this);
+                
+                // (สำคัญ) ถ้า password ว่าง, ให้ลบออกจาก FormData
+                if (!formData.get('password')) {
+                    formData.delete('password');
+                }
+                
+                // (สำคัญ) ลบ Base64 logic ทั้งหมด
 
                 try {
-                    const response = await fetch('/profile/update', {
+                    // (สำคัญ) ส่ง FormData โดยตรง
+                    const response = await fetch('/profile/upload-and-update', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(data)
+                        // (สำคัญ) ห้ามใส่ 'Content-Type' header
+                        // Browser จะตั้งค่า 'multipart/form-data' และ 'boundary' ให้เอง
+                        body: formData 
                     });
+                    
                     const result = await response.json();
                     if (!response.ok) { throw new Error(result.message); }
 
                     // [สำเร็จ]
                     Toast.fire({ icon: 'success', title: result.message });
                     
-                    // อัปเดตชื่อที่ Navbar (ถ้ามี)
-                    // (อันนี้ซับซ้อนเล็กน้อย อาจจะต้องรีเฟรชหน้า)
-                    
                     // ล้างช่องรหัสผ่าน
                     $('#password').val('');
+                    
+                    // รีโหลดหน้าเพื่อให้เห็นการเปลี่ยนแปลงใน Navbar และข้อมูลล่าสุด
+                    setTimeout(() => {
+                        window.location.reload(); 
+                    }, 500); 
 
                 } catch (error) {
                     Toast.fire({ icon: 'error', title: error.message });
