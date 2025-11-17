@@ -21,7 +21,7 @@ app.use(express.json()); // [สำคัญ!] สำหรับ API (AJAX/Fetc
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'YOUR_VERY_SECURE_SECRET_KEY_DEFAULT',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: { maxAge: 1000 * 60 * 60 * 24 } // 24 ชั่วโมง

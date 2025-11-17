@@ -12,7 +12,7 @@ module.exports = () => {
     // [อัปเดต!] (POST /add) - ตอบ JSON
     router.post('/add', async (req, res) => {
         const { productName, price } = req.body;
-        const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/d5fa26ee-9be9-48c9-bf91-03b0cf8fcb94'; 
+        const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL; 
         const products = [];
 
         if (productName && Array.isArray(productName)) {
